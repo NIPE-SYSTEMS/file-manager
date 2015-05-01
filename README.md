@@ -1,3 +1,3 @@
 # file-manager
 
-Local file manager written in node.js.
+Local file manager in the browser written in C.
