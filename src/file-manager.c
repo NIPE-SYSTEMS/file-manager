@@ -2,22 +2,26 @@
 #include <stdlib.h>
 #include <string.h>
 #include <libsoup/soup.h>
+#include <json-glib/json-glib.h>
 #include <netinet/in.h>
 
-// void (*)(struct SoupServer *, struct SoupMessage *, char *, struct GHashTable *, struct SoupClientContext *, void *)
+#define UNUSED(x) (void)(x)
+
 static void cb_get(SoupServer *server, SoupMessage *msg, const char *path, GHashTable *query, SoupClientContext *client, gpointer data)
 {
-	// GSocketAddress *sockaddr = NULL;
-	// struct sockaddr sockaddr_native;
-	// SoupAddress *address = NULL;
+	JsonGenerator *json_generator = NULL;
+	JsonBuilder *json_builder = NULL;
+	JsonNode *json_root = NULL;
+	gchar *json_generated = NULL;
+	gsize json_generated_length = 0;
 	
-	// sockaddr = soup_client_context_get_remote_address(client);
-	// g_socket_address_to_native(sockaddr, &sockaddr_native, g_socket_address_get_native_size(sockaddr), NULL);
-	// address = soup_address_new_from_sockaddr(&sockaddr_native, sizeof(struct sockaddr));
+	UNUSED(server);
+	UNUSED(query);
+	UNUSED(client);
+	UNUSED(data);
 	
-	// printf("Incoming connection from %s\n", soup_address_get_physical(address));
-	
-	printf(" -> \x1b[1m");
+	// logging
+	printf("--> \x1b[1m");
 	
 	if(msg->method == SOUP_METHOD_OPTIONS) printf("OPTIONS");
 	else if(msg->method == SOUP_METHOD_GET) printf("GET");
@@ -37,36 +41,68 @@ static void cb_get(SoupServer *server, SoupMessage *msg, const char *path, GHash
 	
 	printf("\x1b[0m %s\n", path);
 	
+	// GET
 	if(msg->method == SOUP_METHOD_GET)
 	{
-		printf("<- \x1b[1m%i\x1b[0m OK %s\n", SOUP_STATUS_OK, path);
+		printf("<-- \x1b[1m%i\x1b[0m OK %s\n", SOUP_STATUS_OK, path);
 		
 		soup_message_set_status(msg, SOUP_STATUS_OK);
 		soup_message_set_response(msg, "text/plain", SOUP_MEMORY_STATIC, "TODO: Insert regular index file.", 33);
 		return;
 	}
 	
+	// POST
 	if(msg->method == SOUP_METHOD_POST)
 	{
 		if(msg->request_body->length == 0)
 		{
-			printf("<- \x1b[1m%i\x1b[0m Bad Request %s\n", SOUP_STATUS_BAD_REQUEST, path);
+			printf("<-- \x1b[1m%i\x1b[0m Bad Request %s\n", SOUP_STATUS_BAD_REQUEST, path);
 			
 			soup_message_set_status(msg, SOUP_STATUS_BAD_REQUEST);
 			soup_message_set_response(msg, "text/plain", SOUP_MEMORY_STATIC, "400 Bad Request", 16);
 			return;
 		}
 		
-		printf("    sent data: %s\n", msg->request_body->data);
+		printf("  > %s\n", msg->request_body->data);
 		
-		printf("<- \x1b[1m%i\x1b[0m OK %s\n", SOUP_STATUS_OK, path);
+		printf("<-- \x1b[1m%i\x1b[0m OK %s\n", SOUP_STATUS_OK, path);
+		
+		json_generator = json_generator_new();
+		json_builder = json_builder_new();
+		
+		// {
+		json_builder_begin_object(json_builder);
+		//     "url": "http://www.gnome.org/img/flash/two-thirty.png"
+		json_builder_set_member_name(json_builder, "url");
+		json_builder_add_string_value(json_builder, "http://www.gnome.org/img/flash/two-thirty.png");
+		//     "size": [652,242]
+		json_builder_set_member_name(json_builder, "size");
+		json_builder_begin_array(json_builder);
+		json_builder_add_int_value(json_builder, 652);
+		json_builder_add_int_value(json_builder, 242);
+		json_builder_end_array(json_builder);
+		// }
+		json_builder_end_object(json_builder);
+		
+		json_root = json_builder_get_root(json_builder);
+		json_generator_set_root(json_generator, json_root);
+		json_generated = json_generator_to_data(json_generator, &json_generated_length);
 		
 		soup_message_set_status(msg, SOUP_STATUS_OK);
-		soup_message_set_response(msg, "text/plain", SOUP_MEMORY_STATIC, "TODO: Insert reaction.", 23);
+		soup_message_set_response(msg, "text/plain", SOUP_MEMORY_COPY, json_generated, json_generated_length);
+		
+		printf("<   %s\n", json_generated);
+		
+		g_free(json_generated);
+		
+		json_node_free(json_root);
+		g_object_unref(json_generator);
+		g_object_unref(json_builder);
 		return;
 	}
 	
-	printf("<- \x1b[1m%i\x1b[0m Not Implemented %s\n", SOUP_STATUS_NOT_IMPLEMENTED, path);
+	// Not Implemented
+	printf("<-- \x1b[1m%i\x1b[0m Not Implemented %s\n", SOUP_STATUS_NOT_IMPLEMENTED, path);
 	
 	soup_message_set_status(msg, SOUP_STATUS_NOT_IMPLEMENTED);
 }
