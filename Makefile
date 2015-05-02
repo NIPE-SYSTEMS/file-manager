@@ -19,9 +19,11 @@ CFLAGS += -Wall
 CFLAGS += -Wextra
 CFLAGS += `pkg-config --cflags libsoup-2.4`
 CFLAGS += `pkg-config --cflags json-glib-1.0`
+CFLAGS += `pkg-config --cflags gio-2.0`
 
 LIBS += `pkg-config --libs libsoup-2.4`
 LIBS += `pkg-config --libs json-glib-1.0`
+LIBS += `pkg-config --libs gio-2.0`
 
 .PHONY: all file-manager init clean
 

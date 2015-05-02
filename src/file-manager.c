@@ -20,6 +20,7 @@
 #include <string.h>
 #include <libsoup/soup.h>
 #include <json-glib/json-glib.h>
+#include <gio/gio.h>
 #include <netinet/in.h>
 #include <dirent.h>
 
@@ -28,6 +29,17 @@
 typedef struct
 {
 	gchar *name;
+	goffset size;
+	gboolean hidden;
+	GFileType type;
+	glong mod_time_sec;
+	glong mod_time_usec;
+	gchar *mime;
+	gboolean access_read;
+	gboolean access_write;
+	gboolean access_execute;
+	gchar *owner;
+	gchar *group;
 } file_entry_t;
 
 typedef struct
@@ -51,6 +63,72 @@ static void directory_foreach_file(gpointer data, gpointer json_builder)
 	{
 		json_builder_add_string_value(json_builder, "Error");
 	}
+	json_builder_set_member_name(json_builder, "size");
+	json_builder_add_int_value(json_builder, file->size);
+	json_builder_set_member_name(json_builder, "hidden");
+	json_builder_add_boolean_value(json_builder, file->hidden);
+	json_builder_set_member_name(json_builder, "type");
+	switch(file->type)
+	{
+		
+		case G_FILE_TYPE_REGULAR:
+		{
+			json_builder_add_string_value(json_builder, "regular");
+			break;
+		}
+		case G_FILE_TYPE_DIRECTORY:
+		{
+			json_builder_add_string_value(json_builder, "directory");
+			break;
+		}
+		case G_FILE_TYPE_SYMBOLIC_LINK:
+		{
+			json_builder_add_string_value(json_builder, "symlink");
+			break;
+		}
+		case G_FILE_TYPE_SPECIAL:
+		{
+			json_builder_add_string_value(json_builder, "special");
+			break;
+		}
+		case G_FILE_TYPE_SHORTCUT:
+		{
+			json_builder_add_string_value(json_builder, "shortcut");
+			break;
+		}
+		case G_FILE_TYPE_MOUNTABLE:
+		{
+			json_builder_add_string_value(json_builder, "mountable");
+			break;
+		}
+		case G_FILE_TYPE_UNKNOWN: default:
+		{
+			json_builder_add_string_value(json_builder, "unknown");
+			break;
+		}
+	}
+	json_builder_set_member_name(json_builder, "last_modified");
+	json_builder_begin_array(json_builder);
+	json_builder_add_int_value(json_builder, file->mod_time_sec);
+	json_builder_add_int_value(json_builder, file->mod_time_usec);
+	json_builder_end_array(json_builder);
+	
+	json_builder_set_member_name(json_builder, "mime");
+	json_builder_add_string_value(json_builder, file->mime);
+	
+	json_builder_set_member_name(json_builder, "access");
+	json_builder_begin_array(json_builder);
+	json_builder_add_boolean_value(json_builder, file->access_read);
+	json_builder_add_boolean_value(json_builder, file->access_write);
+	json_builder_add_boolean_value(json_builder, file->access_execute);
+	json_builder_end_array(json_builder);
+	
+	json_builder_set_member_name(json_builder, "owner");
+	json_builder_add_string_value(json_builder, file->owner);
+	
+	json_builder_set_member_name(json_builder, "group");
+	json_builder_add_string_value(json_builder, file->group);
+	
 	json_builder_end_object(json_builder);
 }
 
@@ -61,6 +139,21 @@ static void directory_cleanup_ptr_array_element(gpointer data)
 	if(file->name != NULL)
 	{
 		free(file->name);
+	}
+	
+	if(file->mime != NULL)
+	{
+		free(file->mime);
+	}
+	
+	if(file->owner != NULL)
+	{
+		free(file->owner);
+	}
+	
+	if(file->group != NULL)
+	{
+		free(file->group);
 	}
 	
 	free(file);
@@ -74,6 +167,10 @@ static files_t *directory_retrieve(gchar *path)
 	GError *error = NULL;
 	files_t *files = NULL;
 	file_entry_t *file = NULL;
+	gchar *file_path = NULL;
+	GFile *file_structure = NULL;
+	GFileInfo *file_structure_info = NULL;
+	GTimeVal file_structure_info_mod_time = { 0, 0 };
 	
 	files = malloc(sizeof(files_t));
 	if(files == NULL)
@@ -108,11 +205,51 @@ static files_t *directory_retrieve(gchar *path)
 		{
 			fprintf(stderr, "\e[0;31mFailed to allocate memory for file structure\e[0m\n");
 			files->error_message = g_strdup_printf("Failed to allocate memory for file structure");
-			break;
+			continue;
 		}
 		file->name = NULL;
+		file->size = 0;
+		file->hidden = FALSE;
+		file->type = G_FILE_TYPE_UNKNOWN;
+		file->mod_time_sec = 0;
+		file->mod_time_usec = 0;
+		file->mime = NULL;
+		file->access_read = FALSE;
+		file->access_write = FALSE;
+		file->access_execute = FALSE;
+		file->owner = NULL;
+		file->group = NULL;
+		
+		file_path = g_strdup_printf("%s/%s", files->path, file_name);
+		file_structure = g_file_new_for_path(file_path);
+		error = NULL;
+		file_structure_info = g_file_query_info(file_structure, "*", G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS, NULL, &error);
+		if(error != NULL)
+		{
+			fprintf(stderr, "\e[0;31mFailed to get file informations: %s\e[0m\n", error->message);
+			files->error_message = g_strdup_printf("Failed to get file informations: %s", error->message);
+			g_error_free(error);
+			
+			continue;
+		}
+		
+		g_file_info_get_modification_time(file_structure_info, &file_structure_info_mod_time);
 		
 		file->name = strdup(file_name);
+		file->size = g_file_info_get_size(file_structure_info);
+		file->hidden = g_file_info_get_is_hidden(file_structure_info);
+		file->type = g_file_info_get_file_type(file_structure_info);
+		file->mod_time_sec = file_structure_info_mod_time.tv_sec;
+		file->mod_time_usec = file_structure_info_mod_time.tv_usec;
+		file->mime = strdup(g_content_type_get_mime_type(g_file_info_get_content_type(file_structure_info)));
+		file->access_read = g_file_info_get_attribute_boolean(file_structure_info, G_FILE_ATTRIBUTE_ACCESS_CAN_READ);
+		file->access_write = g_file_info_get_attribute_boolean(file_structure_info, G_FILE_ATTRIBUTE_ACCESS_CAN_WRITE);
+		file->access_execute = g_file_info_get_attribute_boolean(file_structure_info, G_FILE_ATTRIBUTE_ACCESS_CAN_EXECUTE);
+		file->owner = strdup(g_file_info_get_attribute_string(file_structure_info, G_FILE_ATTRIBUTE_OWNER_USER));
+		file->group = strdup(g_file_info_get_attribute_string(file_structure_info, G_FILE_ATTRIBUTE_OWNER_GROUP));
+		
+		g_object_unref(file_structure);
+		g_object_unref(file_structure_info);
 		
 		g_ptr_array_add(files->files, file);
 	}
