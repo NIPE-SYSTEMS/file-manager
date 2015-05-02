@@ -274,20 +274,6 @@ static void cb_get(SoupServer *server, SoupMessage *msg, const gchar *path, GHas
 		
 		json_builder_end_object(json_builder);
 		
-		// // {
-		// json_builder_begin_object(json_builder);
-		// //     "url": "http://www.gnome.org/img/flash/two-thirty.png"
-		// json_builder_set_member_name(json_builder, "url");
-		// json_builder_add_string_value(json_builder, "http://www.gnome.org/img/flash/two-thirty.png");
-		// //     "size": [652,242]
-		// json_builder_set_member_name(json_builder, "size");
-		// json_builder_begin_array(json_builder);
-		// json_builder_add_int_value(json_builder, 652);
-		// json_builder_add_int_value(json_builder, 242);
-		// json_builder_end_array(json_builder);
-		// // }
-		// json_builder_end_object(json_builder);
-		
 		json_root = json_builder_get_root(json_builder);
 		json_generator_set_root(json_generator, json_root);
 		json_generated = json_generator_to_data(json_generator, &json_generated_length);
