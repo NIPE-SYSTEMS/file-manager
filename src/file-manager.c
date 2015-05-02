@@ -22,7 +22,6 @@
 #include <json-glib/json-glib.h>
 #include <gio/gio.h>
 #include <netinet/in.h>
-#include <dirent.h>
 
 #define UNUSED(x) (void)(x)
 
