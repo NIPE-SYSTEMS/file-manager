@@ -358,10 +358,6 @@ static void cb_get(SoupServer *server, SoupMessage *msg, const gchar *path, GHas
 			if(json_reader_is_value(json_reader))
 			{
 				files = directory_retrieve((gchar *)json_reader_get_string_value(json_reader));
-				if(files != NULL && files->path != NULL)
-				{
-					printf("    Retrieved path: %s\n", files->path);
-				}
 			}
 			json_reader_end_member(json_reader);
 			
